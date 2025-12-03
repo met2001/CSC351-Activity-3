@@ -1,16 +1,24 @@
 import os
 import sqlite3
 from flask import Flask, request, g, session, redirect, url_for, render_template, flash, send_file, abort
-from werkzeug.utils import secure_filename
+from werkzeug.utils import secure_filename, safe_join
 from io import BytesIO
+import secrets
+import html
 
 app = Flask(__name__)
-app.secret_key = "my-secret-key"  
+app.secret_key = secrets.token_hex(32)  # Fixed with more secure token
 
 DATABASE = "lostfound.db"
-UPLOAD_FOLDER = "uploads"
+UPLOAD_FOLDER = "./uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}  # Only extensions allowed
+MAX_FILE_SIZE = 20 * 1024 * 1024    # 20MB limit for files
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_db():
     db = getattr(g, '_database', None)
@@ -28,13 +36,13 @@ def close_connection(exception):
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        uname = request.form.get('username', '')
-        pwd = request.form.get('password', '')
+        uname = request.form.get('username', '').strip()    # Stripping whitespace
+        pwd = request.form.get('password', '').strip()      # Stripping whitespace
 
         db = get_db()
         cur = db.cursor()
-        query = f"SELECT username, role FROM users WHERE username = '{uname}' AND password = '{pwd}'"
-        cur.execute(query)
+        query = "SELECT username, role FROM users WHERE username = ? AND password = ?"   # User input is not sanitized before being added to the query (use parameterized query)
+        cur.execute(query, (uname, pwd))
         row = cur.fetchone()
         if row:
             session['user'] = row[0]
@@ -71,13 +79,19 @@ def lost_new():
         desc = request.form.get('description', '')
         image = request.files.get('image')
         filename = None
+
         if image:
-            filename = image.filename
-            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            image.save(path)
+            image.seek(0,2)
+            size = image.tell()
+            image.seek(0)
+            if allowed_file(image.filename) and size <= MAX_FILE_SIZE:   # Changed to check file size and extension
+                
+                filename = secure_filename(image.filename)   # Fixed improper sanitization
+                path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                image.save(path)
         db = get_db()
         cur = db.cursor()
-        cur.execute(f"INSERT INTO lost_items (owner, title, description, image) VALUES ('{session['user']}', '{title}', '{desc}', '{filename}')")
+        cur.execute(f"INSERT INTO lost_items (owner, title, description, image) VALUES ('{session['user']}', '{title}', '{desc}', '{filename}')")   # Cross-Site scripting vulnerability (input not sanitized)
         db.commit()
         return redirect(url_for('lost_list'))
     return render_template('lost_new.html')
@@ -88,7 +102,7 @@ def lost_resolve(item_id):
         return redirect(url_for('login'))
     db = get_db()
     cur = db.cursor()
-    cur.execute(f"UPDATE lost_items SET resolved = 1 WHERE id = {item_id}")
+    cur.execute(f"UPDATE lost_items SET resolved = 1 WHERE id = ?", (item_id,)) # SQL injection here (input not sanitized)
     db.commit()
     return redirect(url_for('lost_list'))
 
@@ -111,9 +125,13 @@ def found_new():
         image = request.files.get('image')
         filename = None
         if image:
-            filename = image.filename  
-            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            image.save(path)
+            image.seek(0,2)
+            size = image.tell()
+            image.seek(0)
+            if allowed_file(image.filename) and size <= MAX_FILE_SIZE:
+                filename = secure_filename(image.filename)  # Added secure filename  
+                path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                image.save(path)
         db = get_db()
         cur = db.cursor()
         cur.execute(f"INSERT INTO found_items (posted_by, title, description, image) VALUES ('{session['user']}', '{title}', '{desc}', '{filename}')")
@@ -127,7 +145,7 @@ def found_return(item_id):
         return redirect(url_for('login'))
     db = get_db()
     cur = db.cursor()
-    cur.execute(f"UPDATE found_items SET returned = 1 WHERE id = {item_id}")
+    cur.execute(f"UPDATE found_items SET returned = 1 WHERE id = ?", (item_id,))    # Fixed SQL Injection
     db.commit()
     return redirect(url_for('found_list'))
 
@@ -140,17 +158,18 @@ def search():
     q = ''
     if request.method == 'POST':
         q = request.form.get('q', '')
+        q = html.escape(q)
         db = get_db()
         cur = db.cursor()
-        sql = f"SELECT id, title, description FROM found_items WHERE description LIKE '%{q}%' OR title LIKE '%{q}%'"
-        cur.execute(sql)
+        sql = f"SELECT id, title, description FROM found_items WHERE description LIKE ? OR title LIKE ?"
+        cur.execute(sql, (f'%{q}%', f'%{q}%'))
         results = cur.fetchall()
     return render_template('search.html', results=results, q=q)
 
 # File access
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file_path = safe_join(app.config['UPLOAD_FOLDER'], filename)
     if not os.path.exists(file_path):
         abort(404)
     return send_file(file_path, as_attachment=False)
