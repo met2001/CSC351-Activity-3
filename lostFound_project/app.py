@@ -64,11 +64,13 @@ def index():
 # Lost item service (regular users)
 @app.route('/lost')
 def lost_list():
-    db = get_db()
-    cur = db.cursor()
-    cur.execute("SELECT id, owner, title, description, image, resolved FROM lost_items")
-    items = cur.fetchall()
-    return render_template('lost_list.html', items=items, user=session.get('user'), role=session.get('role'))
+    if 'user' in session:
+        db = get_db()
+        cur = db.cursor()
+        cur.execute("SELECT id, owner, title, description, image, resolved FROM lost_items")
+        items = cur.fetchall()
+        return render_template('lost_list.html', items=items, user=session.get('user'), role=session.get('role'))
+    return render_template('login.html')
 
 @app.route('/lost/new', methods=['GET', 'POST'])
 def lost_new():
@@ -91,7 +93,7 @@ def lost_new():
                 image.save(path)
         db = get_db()
         cur = db.cursor()
-        cur.execute(f"INSERT INTO lost_items (owner, title, description, image) VALUES ('{session['user']}', '{title}', '{desc}', '{filename}')")   # Cross-Site scripting vulnerability (input not sanitized)
+        cur.execute("INSERT INTO lost_items (owner, title, description, image) VALUES (?,?,?,?)", (session['user'], html.escape(title), html.escape(desc), filename))   # SQL Injection fixed
         db.commit()
         return redirect(url_for('lost_list'))
     return render_template('lost_new.html')
@@ -102,18 +104,20 @@ def lost_resolve(item_id):
         return redirect(url_for('login'))
     db = get_db()
     cur = db.cursor()
-    cur.execute(f"UPDATE lost_items SET resolved = 1 WHERE id = ?", (item_id,)) # SQL injection here (input not sanitized)
+    cur.execute("UPDATE lost_items SET resolved = 1 WHERE id = ?", (item_id,)) # SQL injection fixed
     db.commit()
     return redirect(url_for('lost_list'))
 
 # Found item service (staff only)
 @app.route('/found')
 def found_list():
-    db = get_db()
-    cur = db.cursor()
-    cur.execute("SELECT id, posted_by, title, description, image, returned FROM found_items")
-    items = cur.fetchall()
-    return render_template('found_list.html', items=items, user=session.get('user'), role=session.get('role'))
+    if session['role'] == 'staff':
+        db = get_db()
+        cur = db.cursor()
+        cur.execute("SELECT id, posted_by, title, description, image, returned FROM found_items")
+        items = cur.fetchall()
+        return render_template('found_list.html', items=items, user=session.get('user'), role=session.get('role'))
+    return redirect(url_for('index'))   # If the user is not a staff user then they are redirected to the index page
 
 @app.route('/found/new', methods=['GET', 'POST'])
 def found_new():
@@ -134,7 +138,7 @@ def found_new():
                 image.save(path)
         db = get_db()
         cur = db.cursor()
-        cur.execute(f"INSERT INTO found_items (posted_by, title, description, image) VALUES ('{session['user']}', '{title}', '{desc}', '{filename}')")
+        cur.execute("INSERT INTO found_items (posted_by, title, description, image) VALUES (?,?,?,?)", (session['user'], title, desc, filename))    # SQL injection fixed
         db.commit()
         return redirect(url_for('found_list'))
     return render_template('found_new.html')
