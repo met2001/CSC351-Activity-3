@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Lost Items</h2>
+  {% if user %}
+    <p><a href="{{ url_for('lost_new') }}">Post a lost item</a></p>
+  {% else %}
+    <p>Login to post or resolve items.</p>
+  {% endif %}
+  <ul>
+  {% for item in items %}
+    <li>
+      <strong>{{ item[2] }}</strong> by {{ item[1] }} - 
+     
+      <div class="desc">{{ item[3]|safe }}</div>
+      {% if item[4] %}
+        <div>Image: <a href="{{ url_for('uploaded_file', filename=item[4]) }}">{{ item[4] }}</a></div>
+      {% endif %}
+      <div>Resolved: {{ item[5] }}</div>
+      {% if user %}
+        <a href="{{ url_for('lost_resolve', item_id=item[0]) }}">Mark resolved</a>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+{% endblock %}

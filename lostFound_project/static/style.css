@@ -1,0 +1,5 @@
+body { font-family: Arial, sans-serif; margin: 20px; }
+header { margin-bottom: 10px; }
+nav { margin-top: 5px; margin-bottom: 10px; }
+.flashes { color: red; }
+.desc { margin: 6px 0; padding: 6px; border-left: 3px solid #ddd; }

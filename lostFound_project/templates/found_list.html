@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Found Items</h2>
+  {% if role == 'staff' %}
+    <p><a href="{{ url_for('found_new') }}">Post a found item</a></p>
+  {% endif %}
+  <ul>
+  {% for item in items %}
+    <li>
+      <strong>{{ item[2] }}</strong> by {{ item[1] }} - 
+      <div class="desc">{{ item[3]|safe }}</div>
+      {% if item[4] %}
+        <div>Image: <a href="{{ url_for('uploaded_file', filename=item[4]) }}">{{ item[4] }}</a></div>
+      {% endif %}
+      <div>Returned: {{ item[5] }}</div>
+      {% if role == 'staff' %}
+        <a href="{{ url_for('found_return', item_id=item[0]) }}">Mark returned</a>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+{% endblock %}

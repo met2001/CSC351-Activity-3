@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Post Found Item (Staff)</h2>
+  <form method="post" enctype="multipart/form-data">
+    <label>Title: <input name="title"></label><br><br>
+    <label>Description:<br><textarea name="description" rows="4" cols="50"></textarea></label><br><br>
+    <label>Image: <input type="file" name="image"></label><br><br>
+    <button type="submit">Submit</button>
+  </form>
+{% endblock %}

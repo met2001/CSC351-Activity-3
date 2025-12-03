@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Search Found Items</h2>
+  <form method="post">
+    <label>Query: <input name="q" value="{{ q }}"></label>
+    <button type="submit">Search</button>
+  </form>
+
+  <h3>Results</h3>
+  <ul>
+  {% for r in results %}
+    <li><strong>{{ r[1] }}</strong> - <div class="desc">{{ r[2]|safe }}</div></li>
+  {% endfor %}
+  </ul>
+{% endblock %}
